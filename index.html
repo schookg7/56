@@ -2,153 +2,234 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>Простий 2D Minecraft для телефону</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Простий 3D Minecraft-подібний світ</title>
 <style>
-  body {
-    margin:0; padding:0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background: #87ceeb;
-    user-select: none;
+  body { margin: 0; overflow: hidden; user-select: none; }
+  #info {
+    position: absolute;
+    top: 10px; left: 10px;
+    color: white;
     font-family: Arial, sans-serif;
+    z-index: 1;
+    background: rgba(0,0,0,0.4);
+    padding: 8px 12px;
+    border-radius: 6px;
   }
-  #game {
-    border: 2px solid #333;
-    touch-action: manipulation;
-    image-rendering: pixelated;
-    background: #7ec850;
-    margin-top: 10px;
-  }
-  #toolbar {
-    margin-top: 10px;
+  #blockSelector {
+    position: absolute;
+    bottom: 10px; left: 50%;
+    transform: translateX(-50%);
     display: flex;
     gap: 10px;
+    background: rgba(0,0,0,0.4);
+    padding: 6px 12px;
+    border-radius: 8px;
+    z-index: 1;
   }
   .block-btn {
     width: 40px; height: 40px;
-    border: 2px solid #444;
-    background: #ccc;
+    font-size: 28px;
     cursor: pointer;
     user-select: none;
+    background: #ccc;
+    border-radius: 6px;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-weight: bold;
-    font-size: 24px;
-    border-radius: 6px;
   }
   .block-btn.selected {
-    border-color: #f90;
-    background: #ffb84d;
+    border: 3px solid orange;
   }
 </style>
 </head>
 <body>
 
-<h2>Простий 2D Minecraft для телефону</h2>
-<canvas id="game" width="320" height="240"></canvas>
+<div id="info">
+  ЛКМ — додати блок<br/>
+  ПКМ — видалити блок<br/>
+  WASD + миша — рух<br/>
+  Виберіть блок:
+</div>
 
-<div id="toolbar">
+<div id="blockSelector">
   <div class="block-btn selected" data-block="grass" title="Трава">🌿</div>
   <div class="block-btn" data-block="dirt" title="Грунт">🟫</div>
   <div class="block-btn" data-block="stone" title="Камінь">⬛</div>
   <div class="block-btn" data-block="water" title="Вода">💧</div>
-  <div class="block-btn" data-block="erase" title="Видалити">❌</div>
 </div>
 
-<script>
-  const canvas = document.getElementById('game');
-  const ctx = canvas.getContext('2d');
-  const tileSize = 20;
-  const rows = Math.floor(canvas.height / tileSize);
-  const cols = Math.floor(canvas.width / tileSize);
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
 
-  // Кольори блоків
-  const blockColors = {
-    grass: '#4CAF50',
-    dirt: '#8B5A2B',
-    stone: '#555555',
-    water: '#2196F3',
+<script>
+  // Сцена, камера, рендерер
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x87ceeb); // небо
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  // Контроль руху від першої особи
+  const controls = new THREE.PointerLockControls(camera, document.body);
+
+  document.body.addEventListener('click', () => {
+    controls.lock();
+  });
+
+  // Світло
+  const light = new THREE.DirectionalLight(0xffffff, 1);
+  light.position.set(5,10,7);
+  scene.add(light);
+  scene.add(new THREE.AmbientLight(0x404040));
+
+  // Матеріали блоків
+  const materials = {
+    grass: new THREE.MeshLambertMaterial({color: 0x4caf50}),
+    dirt: new THREE.MeshLambertMaterial({color: 0x8b5a2b}),
+    stone: new THREE.MeshLambertMaterial({color: 0x555555}),
+    water: new THREE.MeshLambertMaterial({color: 0x2196f3, transparent: true, opacity: 0.6}),
   };
 
-  // Карта світу (2D масив)
-  let world = [];
-  for(let r=0; r<rows; r++){
-    world[r] = [];
-    for(let c=0; c<cols; c++){
-      if(r > rows - 3) world[r][c] = 'dirt'; // низ - земля
-      else if(r === rows - 3) world[r][c] = 'grass'; // поверхня
-      else world[r][c] = null; // порожньо
+  // Карта розташування блоків - ключ "x_y_z" => mesh
+  const blocks = {};
+
+  // Розмір блоку
+  const BLOCK_SIZE = 1;
+
+  // Функція для створення блоку
+  function createBlock(x, y, z, type){
+    const geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+    const material = materials[type] || materials['dirt'];
+    const cube = new THREE.Mesh(geometry, material);
+    cube.position.set(x, y, z);
+    scene.add(cube);
+    blocks[`${x}_${y}_${z}`] = cube;
+  }
+
+  // Початковий простий ґрунт 10x1x10 блоків
+  for(let x=-5; x<5; x++){
+    for(let z=-5; z<5; z++){
+      createBlock(x, 0, z, 'grass');
     }
   }
 
-  // Обраний блок
-  let selectedBlock = 'grass';
+  // Поточний обраний тип блоку
+  let currentBlockType = 'grass';
 
-  // Малюємо світ
-  function drawWorld(){
-    for(let r=0; r<rows; r++){
-      for(let c=0; c<cols; c++){
-        const block = world[r][c];
-        if(block){
-          ctx.fillStyle = blockColors[block] || '#000';
-          ctx.fillRect(c*tileSize, r*tileSize, tileSize, tileSize);
-          // Край плитки
-          ctx.strokeStyle = '#333';
-          ctx.strokeRect(c*tileSize, r*tileSize, tileSize, tileSize);
-        } else {
-          // Порожньо - світло-блакитний фон (небо)
-          ctx.fillStyle = '#87ceeb';
-          ctx.fillRect(c*tileSize, r*tileSize, tileSize, tileSize);
+  // Вибір блоку UI
+  const blockButtons = document.querySelectorAll('.block-btn');
+  blockButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      blockButtons.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      currentBlockType = btn.getAttribute('data-block');
+    });
+  });
+
+  // Для "промінь" - щоб знаходити, куди кликнули
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  // Встановлюємо камеру спочатку на 2 метри над землею
+  camera.position.set(0, 2, 5);
+
+  // Клавіатурне управління (WASD)
+  const move = { forward: false, backward: false, left: false, right: false };
+  const velocity = new THREE.Vector3();
+  const direction = new THREE.Vector3();
+  let prevTime = performance.now();
+
+  document.addEventListener('keydown', (event) => {
+    switch(event.code){
+      case 'KeyW': move.forward = true; break;
+      case 'KeyS': move.backward = true; break;
+      case 'KeyA': move.left = true; break;
+      case 'KeyD': move.right = true; break;
+    }
+  });
+
+  document.addEventListener('keyup', (event) => {
+    switch(event.code){
+      case 'KeyW': move.forward = false; break;
+      case 'KeyS': move.backward = false; break;
+      case 'KeyA': move.left = false; break;
+      case 'KeyD': move.right = false; break;
+    }
+  });
+
+  // Функція додавання або видалення блоку по кліку
+  function onClick(event){
+    if(!controls.isLocked) return;
+
+    // Обчислюємо позицію миші для raycaster
+    mouse.x = 0;
+    mouse.y = 0;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(Object.values(blocks));
+
+    if(intersects.length > 0){
+      const intersect = intersects[0];
+
+      if(event.button === 0){ // Ліва кнопка - додати блок по сусідству
+        const normal = intersect.face.normal;
+        const pos = intersect.object.position.clone().add(normal);
+        const key = `${pos.x}_${pos.y}_${pos.z}`;
+        if(!blocks[key]){
+          createBlock(pos.x, pos.y, pos.z, currentBlockType);
         }
+      } else if(event.button === 2){ // Права кнопка - видалити блок
+        const obj = intersect.object;
+        scene.remove(obj);
+        const key = `${obj.position.x}_${obj.position.y}_${obj.position.z}`;
+        delete blocks[key];
       }
     }
   }
 
-  // Обробка кліку або торкання
-  function placeBlock(x, y){
-    const c = Math.floor(x / tileSize);
-    const r = Math.floor(y / tileSize);
-    if(r < 0 || r >= rows || c < 0 || c >= cols) return;
+  // Забороняємо контекстне меню ПКМ
+  window.addEventListener('contextmenu', e => e.preventDefault());
 
-    if(selectedBlock === 'erase'){
-      world[r][c] = null;
-    } else {
-      world[r][c] = selectedBlock;
+  window.addEventListener('mousedown', onClick);
+
+  // Анімація та рух
+  function animate(){
+    requestAnimationFrame(animate);
+
+    if(controls.isLocked){
+      const time = performance.now();
+      const delta = (time - prevTime) / 1000;
+
+      velocity.x -= velocity.x * 10.0 * delta;
+      velocity.z -= velocity.z * 10.0 * delta;
+
+      direction.z = Number(move.forward) - Number(move.backward);
+      direction.x = Number(move.right) - Number(move.left);
+      direction.normalize();
+
+      if(move.forward || move.backward) velocity.z -= direction.z * 400.0 * delta;
+      if(move.left || move.right) velocity.x -= direction.x * 400.0 * delta;
+
+      controls.moveRight(-velocity.x * delta);
+      controls.moveForward(-velocity.z * delta);
+
+      prevTime = time;
     }
-    drawWorld();
+
+    renderer.render(scene, camera);
   }
 
-  canvas.addEventListener('click', e => {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    placeBlock(x, y);
+  animate();
+
+  // Підлаштовуємо розмір канваса під вікно
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
   });
-
-  // Підтримка сенсорних пристроїв
-  canvas.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches[0];
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top;
-    placeBlock(x, y);
-  }, {passive:false});
-
-  // Вибір блоків
-  const buttons = document.querySelectorAll('.block-btn');
-  buttons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      buttons.forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      selectedBlock = btn.getAttribute('data-block');
-    });
-  });
-
-  drawWorld();
 </script>
 
 </body>
