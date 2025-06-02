@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Простий 2D Minecraft для телефону</title>
+<style>
+  body {
+    margin:0; padding:0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #87ceeb;
+    user-select: none;
+    font-family: Arial, sans-serif;
+  }
+  #game {
+    border: 2px solid #333;
+    touch-action: manipulation;
+    image-rendering: pixelated;
+    background: #7ec850;
+    margin-top: 10px;
+  }
+  #toolbar {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+  }
+  .block-btn {
+    width: 40px; height: 40px;
+    border: 2px solid #444;
+    background: #ccc;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 24px;
+    border-radius: 6px;
+  }
+  .block-btn.selected {
+    border-color: #f90;
+    background: #ffb84d;
+  }
+</style>
+</head>
+<body>
+
+<h2>Простий 2D Minecraft для телефону</h2>
+<canvas id="game" width="320" height="240"></canvas>
+
+<div id="toolbar">
+  <div class="block-btn selected" data-block="grass" title="Трава">🌿</div>
+  <div class="block-btn" data-block="dirt" title="Грунт">🟫</div>
+  <div class="block-btn" data-block="stone" title="Камінь">⬛</div>
+  <div class="block-btn" data-block="water" title="Вода">💧</div>
+  <div class="block-btn" data-block="erase" title="Видалити">❌</div>
+</div>
+
+<script>
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const tileSize = 20;
+  const rows = Math.floor(canvas.height / tileSize);
+  const cols = Math.floor(canvas.width / tileSize);
+
+  // Кольори блоків
+  const blockColors = {
+    grass: '#4CAF50',
+    dirt: '#8B5A2B',
+    stone: '#555555',
+    water: '#2196F3',
+  };
+
+  // Карта світу (2D масив)
+  let world = [];
+  for(let r=0; r<rows; r++){
+    world[r] = [];
+    for(let c=0; c<cols; c++){
+      if(r > rows - 3) world[r][c] = 'dirt'; // низ - земля
+      else if(r === rows - 3) world[r][c] = 'grass'; // поверхня
+      else world[r][c] = null; // порожньо
+    }
+  }
+
+  // Обраний блок
+  let selectedBlock = 'grass';
+
+  // Малюємо світ
+  function drawWorld(){
+    for(let r=0; r<rows; r++){
+      for(let c=0; c<cols; c++){
+        const block = world[r][c];
+        if(block){
+          ctx.fillStyle = blockColors[block] || '#000';
+          ctx.fillRect(c*tileSize, r*tileSize, tileSize, tileSize);
+          // Край плитки
+          ctx.strokeStyle = '#333';
+          ctx.strokeRect(c*tileSize, r*tileSize, tileSize, tileSize);
+        } else {
+          // Порожньо - світло-блакитний фон (небо)
+          ctx.fillStyle = '#87ceeb';
+          ctx.fillRect(c*tileSize, r*tileSize, tileSize, tileSize);
+        }
+      }
+    }
+  }
+
+  // Обробка кліку або торкання
+  function placeBlock(x, y){
+    const c = Math.floor(x / tileSize);
+    const r = Math.floor(y / tileSize);
+    if(r < 0 || r >= rows || c < 0 || c >= cols) return;
+
+    if(selectedBlock === 'erase'){
+      world[r][c] = null;
+    } else {
+      world[r][c] = selectedBlock;
+    }
+    drawWorld();
+  }
+
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    placeBlock(x, y);
+  });
+
+  // Підтримка сенсорних пристроїв
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    placeBlock(x, y);
+  }, {passive:false});
+
+  // Вибір блоків
+  const buttons = document.querySelectorAll('.block-btn');
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedBlock = btn.getAttribute('data-block');
+    });
+  });
+
+  drawWorld();
+</script>
+
+</body>
+</html>
